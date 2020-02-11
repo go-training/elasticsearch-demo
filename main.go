@@ -8,13 +8,10 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v7"
-	"github.com/elastic/go-elasticsearch/v7/esapi"
 )
 
 var (
@@ -44,8 +41,8 @@ func main() {
 	}
 
 	var (
-		r  map[string]interface{}
-		wg sync.WaitGroup
+		r map[string]interface{}
+		// wg sync.WaitGroup
 	)
 
 	es, err := elasticsearch.NewClient(cfg)
@@ -75,48 +72,48 @@ func main() {
 
 	// 2. Index documents concurrently
 	//
-	for i, title := range []string{"Test One", "Test Two"} {
-		wg.Add(1)
+	// for i, title := range []string{"Test One", "Test Two"} {
+	// 	wg.Add(1)
 
-		go func(i int, title string) {
-			defer wg.Done()
+	// 	go func(i int, title string) {
+	// 		defer wg.Done()
 
-			// Build the request body.
-			var b strings.Builder
-			b.WriteString(`{"title" : "`)
-			b.WriteString(title)
-			b.WriteString(`"}`)
+	// 		// Build the request body.
+	// 		var b strings.Builder
+	// 		b.WriteString(`{"title" : "`)
+	// 		b.WriteString(title)
+	// 		b.WriteString(`"}`)
 
-			// Set up the request object.
-			req := esapi.IndexRequest{
-				Index:      bucket,
-				DocumentID: strconv.Itoa(i + 1),
-				Body:       strings.NewReader(b.String()),
-				Refresh:    "true",
-			}
+	// 		// Set up the request object.
+	// 		req := esapi.IndexRequest{
+	// 			Index:      bucket,
+	// 			DocumentID: strconv.Itoa(i + 1),
+	// 			Body:       strings.NewReader(b.String()),
+	// 			Refresh:    "true",
+	// 		}
 
-			// Perform the request with the client.
-			res, err := req.Do(context.Background(), es)
-			if err != nil {
-				log.Fatalf("Error getting response: %s", err)
-			}
-			defer res.Body.Close()
+	// 		// Perform the request with the client.
+	// 		res, err := req.Do(context.Background(), es)
+	// 		if err != nil {
+	// 			log.Fatalf("Error getting response: %s", err)
+	// 		}
+	// 		defer res.Body.Close()
 
-			if res.IsError() {
-				log.Printf("[%s] Error indexing document ID=%d", res.Status(), i+1)
-			} else {
-				// Deserialize the response into a map.
-				var r map[string]interface{}
-				if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-					log.Printf("Error parsing the response body: %s", err)
-				} else {
-					// Print the response status and indexed document version.
-					log.Printf("[%s] %s; version=%d", res.Status(), r["result"], int(r["_version"].(float64)))
-				}
-			}
-		}(i, title)
-	}
-	wg.Wait()
+	// 		if res.IsError() {
+	// 			log.Printf("[%s] Error indexing document ID=%d", res.Status(), i+1)
+	// 		} else {
+	// 			// Deserialize the response into a map.
+	// 			var r map[string]interface{}
+	// 			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+	// 				log.Printf("Error parsing the response body: %s", err)
+	// 			} else {
+	// 				// Print the response status and indexed document version.
+	// 				log.Printf("[%s] %s; version=%d", res.Status(), r["result"], int(r["_version"].(float64)))
+	// 			}
+	// 		}
+	// 	}(i, title)
+	// }
+	// wg.Wait()
 
 	log.Println(strings.Repeat("-", 37))
 
@@ -125,9 +122,46 @@ func main() {
 	// Build the request body.
 	var buf bytes.Buffer
 	query := map[string]interface{}{
+		"size": 100,
+		"from": 0,
 		"query": map[string]interface{}{
-			"match": map[string]interface{}{
-				"title": "test",
+			"bool": map[string]interface{}{
+				"must": []map[string]interface{}{
+					{
+						"bool": map[string]interface{}{
+							"minimum_should_match": 1,
+							"should": []map[string]interface{}{
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"event.code": "4688",
+									},
+								},
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"event.code": "4624",
+									},
+								},
+							},
+						},
+					},
+					{
+						"bool": map[string]interface{}{
+							"minimum_should_match": 1,
+							"should": []map[string]interface{}{
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"winlog.event_data.CommandLine": "cmd.exe",
+									},
+								},
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"winlog.event_data.CommandLine": "syswow64",
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
@@ -172,9 +206,10 @@ func main() {
 		int(r["hits"].(map[string]interface{})["total"].(map[string]interface{})["value"].(float64)),
 		int(r["took"].(float64)),
 	)
+
 	// Print the ID and document source for each hit.
 	for _, hit := range r["hits"].(map[string]interface{})["hits"].([]interface{}) {
-		log.Printf(" * ID=%s, %s", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"])
+		log.Printf(" * ID=%s, %v", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"].(map[string]interface{})["event"].(map[string]interface{})["code"].(float64))
 	}
 
 	log.Println(strings.Repeat("=", 37))
