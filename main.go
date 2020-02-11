@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 )
@@ -23,6 +24,9 @@ var (
 	batch   int
 	bucket  string
 	address string
+	from    int
+	size    int
+	output  string
 )
 
 func init() {
@@ -30,6 +34,9 @@ func init() {
 	flag.IntVar(&batch, "batch", 250, "Number of documents to send in one batch")
 	flag.StringVar(&bucket, "bucket", "test", "Index")
 	flag.StringVar(&address, "address", "http://127.0.0.1:9200", "server address")
+	flag.IntVar(&from, "from", 0, "offset")
+	flag.IntVar(&size, "size", 100, "limit")
+	flag.StringVar(&output, "output", "output.xlsx", "output excel file")
 	flag.Parse()
 
 	rand.Seed(time.Now().UnixNano())
@@ -125,6 +132,8 @@ func main() {
 	// Build the request body.
 	var buf bytes.Buffer
 	query := map[string]interface{}{
+		"from": from,
+		"size": size,
 		"query": map[string]interface{}{
 			"match": map[string]interface{}{
 				"title": "test",
@@ -173,8 +182,17 @@ func main() {
 		int(r["took"].(float64)),
 	)
 	// Print the ID and document source for each hit.
-	for _, hit := range r["hits"].(map[string]interface{})["hits"].([]interface{}) {
+	f := excelize.NewFile()
+	for i, hit := range r["hits"].(map[string]interface{})["hits"].([]interface{}) {
 		log.Printf(" * ID=%s, %s", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"])
+		// Set value of a cell.
+		f.SetCellValue("Sheet1", "A"+strconv.Itoa((i+1)), hit.(map[string]interface{})["_id"])
+		f.SetCellValue("Sheet1", "B"+strconv.Itoa((i+1)), hit.(map[string]interface{})["_source"])
+	}
+
+	// Save xlsx file by the given path.
+	if err := f.SaveAs(output); err != nil {
+		log.Fatalf(err.Error())
 	}
 
 	log.Println(strings.Repeat("=", 37))
