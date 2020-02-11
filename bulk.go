@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -28,29 +27,7 @@ type Author struct {
 	LastName  string `json:"last_name"`
 }
 
-var (
-	_     = fmt.Print
-	count int
-	batch int
-)
-
-func init() {
-	flag.IntVar(&count, "count", 10000, "Number of documents to generate")
-	flag.IntVar(&batch, "batch", 250, "Number of documents to send in one batch")
-	flag.Parse()
-
-	rand.Seed(time.Now().UnixNano())
-}
-
-func main() {
-	log.SetFlags(0)
-
-	cfg := elasticsearch.Config{
-		Addresses: []string{
-			"http://127.0.0.1:9200/",
-		},
-	}
-
+func bulk(es *elasticsearch.Client, bucket string) {
 	type bulkResponse struct {
 		Errors bool `json:"errors"`
 		Items  []struct {
@@ -77,8 +54,7 @@ func main() {
 		raw map[string]interface{}
 		blk *bulkResponse
 
-		articles  []*Article
-		indexName = "articles"
+		articles []*Article
 
 		numItems   int
 		numErrors  int
@@ -86,13 +62,6 @@ func main() {
 		numBatches int
 		currBatch  int
 	)
-
-	// Create the Elasticsearch client
-	//
-	es, err := elasticsearch.NewClient(cfg)
-	if err != nil {
-		log.Fatalf("Error creating the client: %s", err)
-	}
 
 	// Generate the articles collection
 	//
@@ -113,10 +82,10 @@ func main() {
 
 	// Re-create the index
 	//
-	if res, err = es.Indices.Delete([]string{indexName}); err != nil {
+	if res, err = es.Indices.Delete([]string{bucket}); err != nil {
 		log.Fatalf("Cannot delete index: %s", err)
 	}
-	res, err = es.Indices.Create(indexName)
+	res, err = es.Indices.Create(bucket)
 	if err != nil {
 		log.Fatalf("Cannot create index: %s", err)
 	}
@@ -176,7 +145,7 @@ func main() {
 		if i > 0 && i%batch == 0 || i == count-1 {
 			log.Printf("> Batch %-2d of %d", currBatch, numBatches)
 
-			res, err = es.Bulk(bytes.NewReader(buf.Bytes()), es.Bulk.WithIndex(indexName))
+			res, err = es.Bulk(bytes.NewReader(buf.Bytes()), es.Bulk.WithIndex(bucket))
 			if err != nil {
 				log.Fatalf("Failure indexing batch %d: %s", currBatch, err)
 			}

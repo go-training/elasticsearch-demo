@@ -4,20 +4,42 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"log"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 )
 
+var (
+	_       = fmt.Print
+	count   int
+	batch   int
+	bucket  string
+	address string
+)
+
+func init() {
+	flag.IntVar(&count, "count", 10000, "Number of documents to generate")
+	flag.IntVar(&batch, "batch", 250, "Number of documents to send in one batch")
+	flag.StringVar(&bucket, "bucket", "test", "Index")
+	flag.StringVar(&address, "address", "http://127.0.0.1:9200", "server address")
+	flag.Parse()
+
+	rand.Seed(time.Now().UnixNano())
+}
+
 func main() {
 	log.SetFlags(0)
 	cfg := elasticsearch.Config{
 		Addresses: []string{
-			"http://127.0.0.1:9200/",
+			address,
 		},
 	}
 
@@ -67,7 +89,7 @@ func main() {
 
 			// Set up the request object.
 			req := esapi.IndexRequest{
-				Index:      "test",
+				Index:      bucket,
 				DocumentID: strconv.Itoa(i + 1),
 				Body:       strings.NewReader(b.String()),
 				Refresh:    "true",
