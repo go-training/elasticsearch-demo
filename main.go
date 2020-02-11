@@ -138,7 +138,7 @@ func main() {
 	// Perform the search request.
 	res, err = es.Search(
 		es.Search.WithContext(context.Background()),
-		es.Search.WithIndex("test"),
+		es.Search.WithIndex(bucket),
 		es.Search.WithBody(&buf),
 		es.Search.WithTrackTotalHits(true),
 		es.Search.WithPretty(),
