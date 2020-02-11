@@ -14,6 +14,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 )
 
+// Article data
 type Article struct {
 	ID        int       `json:"id"`
 	Title     string    `json:"title"`
@@ -22,6 +23,7 @@ type Article struct {
 	Author    Author    `json:"author"`
 }
 
+// Author data
 type Author struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
