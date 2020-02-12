@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v7"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -30,6 +32,38 @@ func init() {
 	flag.Parse()
 
 	rand.Seed(time.Now().UnixNano())
+}
+
+// WindowsLog
+type WindowsLog struct {
+	Hostname     string
+	EventCode    string
+	Kernel       string
+	ComputerName string
+	RecordID     string
+
+	AuthenticationPackageName string
+	IpAddress                 string
+	LmPackageName             string
+	LogonProcessName          string
+	LogonType                 string
+	ProcessId                 string
+	SubjectUserSid            string
+	TargetDomainName          string
+	TargetUserName            string
+	TargetUserSid             string
+	WorkstationName           string
+
+	FailureReason     string
+	CommandLine       string
+	NewProcessName    string
+	SubjectUserName   string
+	SubjectDomainName string
+
+	ObjectName   string
+	ObjectServer string
+	ObjectType   string
+	ProcessName  string
 }
 
 func main() {
@@ -122,7 +156,7 @@ func main() {
 	// Build the request body.
 	var buf bytes.Buffer
 	query := map[string]interface{}{
-		"size": 100,
+		"size": 300,
 		"from": 0,
 		"query": map[string]interface{}{
 			"bool": map[string]interface{}{
@@ -141,6 +175,21 @@ func main() {
 										"event.code": "4624",
 									},
 								},
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"event.code": "4625",
+									},
+								},
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"event.code": "5140",
+									},
+								},
+								map[string]interface{}{
+									"match_phrase": map[string]interface{}{
+										"event.code": "4663",
+									},
+								},
 							},
 						},
 					},
@@ -150,12 +199,7 @@ func main() {
 							"should": []map[string]interface{}{
 								map[string]interface{}{
 									"match_phrase": map[string]interface{}{
-										"winlog.event_data.CommandLine": "cmd.exe",
-									},
-								},
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"winlog.event_data.CommandLine": "syswow64",
+										"host.name": "mstarvstp01",
 									},
 								},
 							},
@@ -208,8 +252,52 @@ func main() {
 	)
 
 	// Print the ID and document source for each hit.
+	events := []*WindowsLog{}
 	for _, hit := range r["hits"].(map[string]interface{})["hits"].([]interface{}) {
-		log.Printf(" * ID=%s, %v", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"].(map[string]interface{})["event"].(map[string]interface{})["code"].(float64))
+		output, _ := json.Marshal(hit.(map[string]interface{})["_source"])
+		log.Printf(" * ID=%s, %v, %v", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"].(map[string]interface{})["event"].(map[string]interface{})["code"].(float64), gjson.Get(string(output), "host.name").String())
+
+		event := &WindowsLog{
+			EventCode:    gjson.Get(string(output), "event.code").String(),
+			Hostname:     gjson.Get(string(output), "host.name").String(),
+			Kernel:       gjson.Get(string(output), "host.os.kernel").String(),
+			ComputerName: gjson.Get(string(output), "winlog.computer_name").String(),
+			RecordID:     gjson.Get(string(output), "winlog.record_id").String(),
+
+			AuthenticationPackageName: gjson.Get(string(output), "winlog.event_data.AuthenticationPackageName").String(),
+			IpAddress:                 gjson.Get(string(output), "winlog.event_data.IpAddress").String(),
+			LmPackageName:             gjson.Get(string(output), "winlog.event_data.LmPackageName").String(),
+			LogonProcessName:          gjson.Get(string(output), "winlog.event_data.LogonProcessName").String(),
+			LogonType:                 gjson.Get(string(output), "winlog.event_data.LogonType").String(),
+			ProcessId:                 gjson.Get(string(output), "winlog.event_data.ProcessId").String(),
+			SubjectUserSid:            gjson.Get(string(output), "winlog.event_data.SubjectUserSid").String(),
+			TargetDomainName:          gjson.Get(string(output), "winlog.event_data.TargetDomainName").String(),
+			TargetUserName:            gjson.Get(string(output), "winlog.event_data.TargetUserName").String(),
+			TargetUserSid:             gjson.Get(string(output), "winlog.event_data.TargetUserSid").String(),
+			WorkstationName:           gjson.Get(string(output), "winlog.event_data.WorkstationName").String(),
+
+			FailureReason:     gjson.Get(string(output), "winlog.event_data.FailureReason").String(),
+			CommandLine:       gjson.Get(string(output), "winlog.event_data.CommandLine").String(),
+			NewProcessName:    gjson.Get(string(output), "winlog.event_data.NewProcessName").String(),
+			SubjectUserName:   gjson.Get(string(output), "winlog.event_data.SubjectUserName").String(),
+			SubjectDomainName: gjson.Get(string(output), "winlog.event_data.SubjectDomainName").String(),
+
+			ObjectName:   gjson.Get(string(output), "winlog.event_data.ObjectName").String(),
+			ObjectServer: gjson.Get(string(output), "winlog.event_data.ObjectServer").String(),
+			ObjectType:   gjson.Get(string(output), "winlog.event_data.ObjectType").String(),
+			ProcessName:  gjson.Get(string(output), "winlog.event_data.ProcessName").String(),
+		}
+		events = append(events, event)
+	}
+
+	output, _ := json.Marshal(events)
+	log.Println("json len: ", len(output))
+	log.Println("events len: ", len(events))
+
+	// To start, here's how to dump a string (or just
+	// bytes) into a file.
+	if err := ioutil.WriteFile("output.json", output, 0644); err != nil {
+		log.Fatalf("can't write the file: %s", err)
 	}
 
 	log.Println(strings.Repeat("=", 37))
