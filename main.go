@@ -60,10 +60,11 @@ type WindowsLog struct {
 	SubjectUserName   string
 	SubjectDomainName string
 
-	ObjectName   string
-	ObjectServer string
-	ObjectType   string
-	ProcessName  string
+	ObjectName     string
+	ObjectServer   string
+	ObjectType     string
+	ProcessName    string
+	ShareLocalPath string
 }
 
 func main() {
@@ -155,150 +156,197 @@ func main() {
 	//
 	// Build the request body.
 	var buf bytes.Buffer
-	query := map[string]interface{}{
-		"size": 300,
-		"from": 0,
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": []map[string]interface{}{
-					{
-						"bool": map[string]interface{}{
-							"minimum_should_match": 1,
-							"should": []map[string]interface{}{
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"event.code": "4688",
-									},
-								},
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"event.code": "4624",
-									},
-								},
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"event.code": "4625",
-									},
-								},
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"event.code": "5140",
-									},
-								},
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"event.code": "4663",
+	hosts := []string{
+		"MSTARVS4",
+		"MTKSCMP61",
+		"YMY-SVR1",
+		"mstarbkcv01",
+		"mstarbkcv04",
+		"mstarbkcv05",
+		"mstarbkcv06",
+		"mstarvstp01",
+		"pedigree-svr1",
+		"proj-sps",
+
+		"YMY-AP1",
+		"MTKRTDT01",
+		"mslab793506990",
+		"mstarbkcv02",
+		"mstarbkcv03",
+		"mstardp01",
+		"mstarhv01",
+		"mstarsus",
+		"mtkppc01",
+	}
+
+	for _, host := range hosts {
+		size := 10000
+		start := 0
+		num := 0
+		// Print the ID and document source for each hit.
+		events := []*WindowsLog{}
+		for {
+			query := map[string]interface{}{
+				"size": 10000,
+				"from": start,
+				"query": map[string]interface{}{
+					"bool": map[string]interface{}{
+						"must": []map[string]interface{}{
+							{
+								"bool": map[string]interface{}{
+									"minimum_should_match": 1,
+									"should": []map[string]interface{}{
+										map[string]interface{}{
+											"match_phrase": map[string]interface{}{
+												"event.code": "4688",
+											},
+										},
+										map[string]interface{}{
+											"match_phrase": map[string]interface{}{
+												"event.code": "4624",
+											},
+										},
+										map[string]interface{}{
+											"match_phrase": map[string]interface{}{
+												"event.code": "4625",
+											},
+										},
+										map[string]interface{}{
+											"match_phrase": map[string]interface{}{
+												"event.code": "5140",
+											},
+										},
+										map[string]interface{}{
+											"match_phrase": map[string]interface{}{
+												"event.code": "4663",
+											},
+										},
 									},
 								},
 							},
-						},
-					},
-					{
-						"bool": map[string]interface{}{
-							"minimum_should_match": 1,
-							"should": []map[string]interface{}{
-								map[string]interface{}{
-									"match_phrase": map[string]interface{}{
-										"host.name": "mstarvstp01",
+							{
+								"bool": map[string]interface{}{
+									"minimum_should_match": 1,
+									"should": []map[string]interface{}{
+										map[string]interface{}{
+											"match_phrase": map[string]interface{}{
+												"host.name": host,
+											},
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-		},
-	}
-	if err := json.NewEncoder(&buf).Encode(query); err != nil {
-		log.Fatalf("Error encoding query: %s", err)
-	}
+			}
+			if err := json.NewEncoder(&buf).Encode(query); err != nil {
+				log.Fatalf("Error encoding query: %s", err)
+			}
 
-	// Perform the search request.
-	res, err = es.Search(
-		es.Search.WithContext(context.Background()),
-		es.Search.WithIndex(bucket),
-		es.Search.WithBody(&buf),
-		es.Search.WithTrackTotalHits(true),
-		es.Search.WithPretty(),
-	)
-	if err != nil {
-		log.Fatalf("Error getting response: %s", err)
-	}
-	defer res.Body.Close()
-
-	if res.IsError() {
-		var e map[string]interface{}
-		if err := json.NewDecoder(res.Body).Decode(&e); err != nil {
-			log.Fatalf("Error parsing the response body: %s", err)
-		} else {
-			// Print the response status and error information.
-			log.Fatalf("[%s] %s: %s",
-				res.Status(),
-				e["error"].(map[string]interface{})["type"],
-				e["error"].(map[string]interface{})["reason"],
+			// Perform the search request.
+			res, err = es.Search(
+				es.Search.WithContext(context.Background()),
+				es.Search.WithIndex("auditbeat-2019.09.*", "auditbeat-2019.10.*"),
+				es.Search.WithBody(&buf),
+				es.Search.WithTrackTotalHits(true),
+				es.Search.WithPretty(),
 			)
+			if err != nil {
+				log.Fatalf("Error getting response: %s", err)
+			}
+			defer res.Body.Close()
+
+			if res.IsError() {
+				var e map[string]interface{}
+				if err := json.NewDecoder(res.Body).Decode(&e); err != nil {
+					log.Fatalf("Error parsing the response body: %s", err)
+				} else {
+					// Print the response status and error information.
+					log.Fatalf("[%s] %s: %s",
+						res.Status(),
+						e["error"].(map[string]interface{})["type"],
+						e["error"].(map[string]interface{})["reason"],
+					)
+				}
+			}
+
+			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+				log.Fatalf("Error parsing the response body: %s", err)
+			}
+			// Print the response status, number of results, and request duration.
+			log.Printf(
+				"[%s] %d hits; took: %dms; host: %s",
+				res.Status(),
+				int(r["hits"].(map[string]interface{})["total"].(map[string]interface{})["value"].(float64)),
+				int(r["took"].(float64)),
+				host,
+			)
+
+			num = int(r["hits"].(map[string]interface{})["total"].(map[string]interface{})["value"].(float64))
+
+			log.Printf(
+				"start: %d, num: %d; host: %s",
+				start,
+				num,
+				host,
+			)
+			for _, hit := range r["hits"].(map[string]interface{})["hits"].([]interface{}) {
+				output, _ := json.Marshal(hit.(map[string]interface{})["_source"])
+				// log.Printf(" * ID=%s, %v, %v", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"].(map[string]interface{})["event"].(map[string]interface{})["code"].(float64), gjson.Get(string(output), "host.name").String())
+
+				event := &WindowsLog{
+					EventCode:    gjson.Get(string(output), "event.code").String(),
+					Hostname:     gjson.Get(string(output), "host.name").String(),
+					Kernel:       gjson.Get(string(output), "host.os.kernel").String(),
+					ComputerName: gjson.Get(string(output), "winlog.computer_name").String(),
+					RecordID:     gjson.Get(string(output), "winlog.record_id").String(),
+
+					AuthenticationPackageName: gjson.Get(string(output), "winlog.event_data.AuthenticationPackageName").String(),
+					IpAddress:                 gjson.Get(string(output), "winlog.event_data.IpAddress").String(),
+					LmPackageName:             gjson.Get(string(output), "winlog.event_data.LmPackageName").String(),
+					LogonProcessName:          gjson.Get(string(output), "winlog.event_data.LogonProcessName").String(),
+					LogonType:                 gjson.Get(string(output), "winlog.event_data.LogonType").String(),
+					ProcessId:                 gjson.Get(string(output), "winlog.event_data.ProcessId").String(),
+					SubjectUserSid:            gjson.Get(string(output), "winlog.event_data.SubjectUserSid").String(),
+					TargetDomainName:          gjson.Get(string(output), "winlog.event_data.TargetDomainName").String(),
+					TargetUserName:            gjson.Get(string(output), "winlog.event_data.TargetUserName").String(),
+					TargetUserSid:             gjson.Get(string(output), "winlog.event_data.TargetUserSid").String(),
+					WorkstationName:           gjson.Get(string(output), "winlog.event_data.WorkstationName").String(),
+
+					FailureReason:     gjson.Get(string(output), "winlog.event_data.FailureReason").String(),
+					CommandLine:       gjson.Get(string(output), "winlog.event_data.CommandLine").String(),
+					NewProcessName:    gjson.Get(string(output), "winlog.event_data.NewProcessName").String(),
+					SubjectUserName:   gjson.Get(string(output), "winlog.event_data.SubjectUserName").String(),
+					SubjectDomainName: gjson.Get(string(output), "winlog.event_data.SubjectDomainName").String(),
+
+					ObjectName:     gjson.Get(string(output), "winlog.event_data.ObjectName").String(),
+					ObjectServer:   gjson.Get(string(output), "winlog.event_data.ObjectServer").String(),
+					ObjectType:     gjson.Get(string(output), "winlog.event_data.ObjectType").String(),
+					ProcessName:    gjson.Get(string(output), "winlog.event_data.ProcessName").String(),
+					ShareLocalPath: gjson.Get(string(output), "winlog.event_data.ShareLocalPath").String(),
+				}
+				events = append(events, event)
+			}
+
+			log.Println(strings.Repeat("=", 37))
+
+			if start < num {
+				start += size
+			}
+
+			if start > num {
+				break
+			}
 		}
-	}
 
-	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-		log.Fatalf("Error parsing the response body: %s", err)
-	}
-	// Print the response status, number of results, and request duration.
-	log.Printf(
-		"[%s] %d hits; took: %dms",
-		res.Status(),
-		int(r["hits"].(map[string]interface{})["total"].(map[string]interface{})["value"].(float64)),
-		int(r["took"].(float64)),
-	)
+		output, _ := json.Marshal(events)
 
-	// Print the ID and document source for each hit.
-	events := []*WindowsLog{}
-	for _, hit := range r["hits"].(map[string]interface{})["hits"].([]interface{}) {
-		output, _ := json.Marshal(hit.(map[string]interface{})["_source"])
-		log.Printf(" * ID=%s, %v, %v", hit.(map[string]interface{})["_id"], hit.(map[string]interface{})["_source"].(map[string]interface{})["event"].(map[string]interface{})["code"].(float64), gjson.Get(string(output), "host.name").String())
-
-		event := &WindowsLog{
-			EventCode:    gjson.Get(string(output), "event.code").String(),
-			Hostname:     gjson.Get(string(output), "host.name").String(),
-			Kernel:       gjson.Get(string(output), "host.os.kernel").String(),
-			ComputerName: gjson.Get(string(output), "winlog.computer_name").String(),
-			RecordID:     gjson.Get(string(output), "winlog.record_id").String(),
-
-			AuthenticationPackageName: gjson.Get(string(output), "winlog.event_data.AuthenticationPackageName").String(),
-			IpAddress:                 gjson.Get(string(output), "winlog.event_data.IpAddress").String(),
-			LmPackageName:             gjson.Get(string(output), "winlog.event_data.LmPackageName").String(),
-			LogonProcessName:          gjson.Get(string(output), "winlog.event_data.LogonProcessName").String(),
-			LogonType:                 gjson.Get(string(output), "winlog.event_data.LogonType").String(),
-			ProcessId:                 gjson.Get(string(output), "winlog.event_data.ProcessId").String(),
-			SubjectUserSid:            gjson.Get(string(output), "winlog.event_data.SubjectUserSid").String(),
-			TargetDomainName:          gjson.Get(string(output), "winlog.event_data.TargetDomainName").String(),
-			TargetUserName:            gjson.Get(string(output), "winlog.event_data.TargetUserName").String(),
-			TargetUserSid:             gjson.Get(string(output), "winlog.event_data.TargetUserSid").String(),
-			WorkstationName:           gjson.Get(string(output), "winlog.event_data.WorkstationName").String(),
-
-			FailureReason:     gjson.Get(string(output), "winlog.event_data.FailureReason").String(),
-			CommandLine:       gjson.Get(string(output), "winlog.event_data.CommandLine").String(),
-			NewProcessName:    gjson.Get(string(output), "winlog.event_data.NewProcessName").String(),
-			SubjectUserName:   gjson.Get(string(output), "winlog.event_data.SubjectUserName").String(),
-			SubjectDomainName: gjson.Get(string(output), "winlog.event_data.SubjectDomainName").String(),
-
-			ObjectName:   gjson.Get(string(output), "winlog.event_data.ObjectName").String(),
-			ObjectServer: gjson.Get(string(output), "winlog.event_data.ObjectServer").String(),
-			ObjectType:   gjson.Get(string(output), "winlog.event_data.ObjectType").String(),
-			ProcessName:  gjson.Get(string(output), "winlog.event_data.ProcessName").String(),
+		// To start, here's how to dump a string (or just
+		// bytes) into a file.
+		if err := ioutil.WriteFile("log/"+host+"_output.json", output, 0644); err != nil {
+			log.Fatalf("can't write the file: %s", err)
 		}
-		events = append(events, event)
+
 	}
-
-	output, _ := json.Marshal(events)
-	log.Println("json len: ", len(output))
-	log.Println("events len: ", len(events))
-
-	// To start, here's how to dump a string (or just
-	// bytes) into a file.
-	if err := ioutil.WriteFile("output.json", output, 0644); err != nil {
-		log.Fatalf("can't write the file: %s", err)
-	}
-
-	log.Println(strings.Repeat("=", 37))
 }
