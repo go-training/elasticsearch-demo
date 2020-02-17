@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,7 +27,7 @@ var (
 
 func init() {
 	flag.IntVar(&count, "count", 10000, "Number of documents to generate")
-	flag.IntVar(&batch, "batch", 250, "Number of documents to send in one batch")
+	flag.IntVar(&batch, "batch", 0, "Number of documents to send in one batch")
 	flag.StringVar(&bucket, "bucket", "test", "Index")
 	flag.StringVar(&address, "address", "http://127.0.0.1:9200", "server address")
 	flag.Parse()
@@ -157,37 +158,38 @@ func main() {
 	// Build the request body.
 	var buf bytes.Buffer
 	hosts := []string{
-		"MSTARVS4",
-		"MTKSCMP61",
-		"YMY-SVR1",
-		"mstarbkcv01",
-		"mstarbkcv04",
-		"mstarbkcv05",
-		"mstarbkcv06",
-		"mstarvstp01",
+		// "MSTARVS4",
+		// "MTKSCMP61",
+		// "YMY-SVR1",
+		// "mstarbkcv01",
+		// "mstarbkcv04",
+		// "mstarbkcv05",
+		// "mstarbkcv06",
+		// "mstarvstp01",
 		"pedigree-svr1",
-		"proj-sps",
+		// "proj-sps",
 
-		"YMY-AP1",
-		"MTKRTDT01",
-		"mslab793506990",
-		"mstarbkcv02",
-		"mstarbkcv03",
-		"mstardp01",
+		// "YMY-AP1",
+		// "MTKRTDT01",
+		// "mslab793506990",
+		// "mstarbkcv02",
+		// "mstarbkcv03",
+		// "mstardp01",
 		"mstarhv01",
-		"mstarsus",
-		"mtkppc01",
+		// "mstarsus",
+		// "mtkppc01",
 	}
 
 	for _, host := range hosts {
-		size := 10000
-		start := 0
+		start := batch
 		num := 0
 		// Print the ID and document source for each hit.
 		events := []*WindowsLog{}
 		for {
+			log.Println("size:", count)
+			log.Println("from:", start)
 			query := map[string]interface{}{
-				"size": 10000,
+				"size": count,
 				"from": start,
 				"query": map[string]interface{}{
 					"bool": map[string]interface{}{
@@ -331,22 +333,21 @@ func main() {
 
 			log.Println(strings.Repeat("=", 37))
 
+			output, _ := json.Marshal(events)
+
+			// To start, here's how to dump a string (or just
+			// bytes) into a file.
+			if err := ioutil.WriteFile("log/"+host+"_output_"+strconv.Itoa(start)+".json", output, 0644); err != nil {
+				log.Fatalf("can't write the file: %s", err)
+			}
+
 			if start < num {
-				start += size
+				start += count
 			}
 
 			if start > num {
 				break
 			}
 		}
-
-		output, _ := json.Marshal(events)
-
-		// To start, here's how to dump a string (or just
-		// bytes) into a file.
-		if err := ioutil.WriteFile("log/"+host+"_output.json", output, 0644); err != nil {
-			log.Fatalf("can't write the file: %s", err)
-		}
-
 	}
 }
