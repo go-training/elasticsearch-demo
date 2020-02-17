@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// WindowsLog
+// WindowsLog ...
 type WindowsLog struct {
 	Hostname     string
 	EventCode    string
@@ -66,6 +67,16 @@ type WindowsLog struct {
 	ObjectType     string
 	ProcessName    string
 	ShareLocalPath string
+}
+
+// fileExists checks if a file exists and is not a directory before we
+// try using it to prevent further errors.
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }
 
 func main() {
@@ -188,6 +199,13 @@ func main() {
 		for {
 			log.Println("size:", count)
 			log.Println("from:", start)
+
+			jsonPath := "log/" + host + "_output_" + strconv.Itoa(start) + ".json"
+			if fileExists(jsonPath) {
+				log.Printf("%s exist\n", jsonPath)
+				continue
+			}
+
 			query := map[string]interface{}{
 				"size": count,
 				"from": start,
